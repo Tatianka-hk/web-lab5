@@ -2,74 +2,67 @@
   import { onMount } from "svelte";
   import http from "./request-helper";
   import OperationDocsStore from "./operationDocsStore";
-  import { ApolloClient, InMemoryCache, HttpLink, split } from "@apollo/client";
-  import { setClient, subscribe } from "svelte-apollo";
-  import { WebSocketLink } from "@apollo/client/link/ws";
-  import { getMainDefinition } from "@apollo/client/utilities";
+  import { isAuthenticated, user, fruits, token } from "./store";
+  import auth from "./auth-service";
+  let auth0Client;
+  onMount(async () => {
+    auth0Client = await auth.createClient();
 
-  function createApolloClient() {
-    const httpLink = new HttpLink({
-      uri: "https://myweblabs.herokuapp.com/v1/graphql",
-    });
-    const cache = new InMemoryCache();
-    const wsLink = new WebSocketLink({
-      uri: "wss://myweblabs.herokuapp.com/v1/graphql",
-      options: {
-        reconnect: true,
-      },
-    });
-    const link = split(
-      ({ query }) => {
-        const definition = getMainDefinition(query);
-        return (
-          definition.kind === "OperationDefinition" &&
-          definition.operation === "subscription"
-        );
-      },
-      wsLink,
-      httpLink,
-    );
-    return new ApolloClient({
-      link,
-      cache,
-    });
-  }
+    isAuthenticated.set(await auth0Client.isAuthenticated());
+    user.set(await auth0Client.getUser());
+    if (isAuthenticated) {
+      const accessToken = await auth0Client.getIdTokenClaims();
+      token.set(accessToken.__raw);
+    }
+  });
 
-  const client = createApolloClient();
-  setClient(client);
-  const fruits = subscribe(OperationDocsStore.subscribeToAll());
+  token.subscribe(async (value) => {
+    if (value) {
+      const result = await http.startFetchMyQuery(OperationDocsStore.getAll());
+      fruits.set(result.fruits);
+    }
+  });
 
   const addFruit = async () => {
     const name = prompt("name") || "";
-    await http.startExecuteMyMutation(OperationDocsStore.addOne(name));
+    const { insert_fruits_one } = await http.startExecuteMyMutation(
+      OperationDocsStore.addOne(name),
+    );
+    fruits.update((n) => [...n, insert_fruits_one]);
   };
 
   const deleteFruit = async () => {
     const name = prompt("which fruit to delete?") || "";
     if (name) {
       await http.startExecuteMyMutation(OperationDocsStore.deleteByName(name));
-      // heroes.update(n => n.filter(hero => hero.name!==name))
+      fruits.update((n) => n.filter((fruit) => fruit.name !== name));
     }
   };
+
+  function login() {
+    auth.loginWithPopup(auth0Client);
+  }
+
+  function logout() {
+    auth.logout(auth0Client);
+  }
 </script>
 
 <main>
-  {#if $fruits.loading}
-    <h1>Loading...</h1>
-  {:else if $fruits.error}
-    <h1>{$fruits.error}</h1>
-  {:else}
+  {#if $isAuthenticated}
+    <button on:click={logout}>Log out</button>
     <button on:click={addFruit}>Add new fruit</button>
     <button on:click={deleteFruit}>Delete fruit</button>
 
-    {#each $fruits.data.fruits as fruit}
+    {#each $fruits as fruit}
       <div>
         <p>fruit name: {fruit.name}</p>
         <p>user id: {fruit.user_id}</p>
         <hr />
       </div>
     {/each}
-  {/if}
+  {:else}
+    <button on:click={login}>Log in</button>{/if}
 </main>
 
 <style>
