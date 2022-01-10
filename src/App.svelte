@@ -4,6 +4,7 @@
   import OperationDocsStore from "./operationDocsStore";
   import { isAuthenticated, user, fruits, token } from "./store";
   import auth from "./auth-service";
+  import { writable } from "svelte/store";
   let auth0Client;
   onMount(async () => {
     auth0Client = await auth.createClient();
@@ -31,6 +32,14 @@
     fruits.update((n) => [...n, insert_fruits_one]);
   };
 
+  const offline = writable(false);
+  window.onoffline = () => {
+    offline.set(true);
+  };
+  window.ononline = () => {
+    offline.set(false);
+  };
+  
   const deleteFruit = async () => {
     const name = prompt("which fruit to delete?") || "";
     if (name) {
