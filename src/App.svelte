@@ -58,6 +58,9 @@
 </script>
 
 <main>
+  {#if !$offline}
+
+
   {#if $isAuthenticated}
     <button on:click={logout}>Log out</button>
     <button on:click={addFruit}>Add new fruit</button>
@@ -72,6 +75,9 @@
     {/each}
   {:else}
     <button on:click={login}>Log in</button>{/if}
+  {:else}
+    <h1>You are offline</h1>
+  {/if}
 </main>
 
 <style>
