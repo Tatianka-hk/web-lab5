@@ -1,9 +1,9 @@
 import { get } from "svelte/store";
-import { token } from "./store";
+import { token, requestCounter } from "./store";
 
 class RequestHelper {
   constructor() {
-    this.API_URL = "https://myweblabs.herokuapp.com/v1/graphql";
+    this.API_URL = URI;
   }
 
   async fetchGraphQL(operationsDoc, operationName, variables) {
@@ -26,16 +26,23 @@ class RequestHelper {
   }
 
   async startFetchMyQuery(operationsDoc) {
-    const { errors, data } = await this.fetchMyQuery(operationsDoc);
+    requestCounter.update((n) => n + 1);
+    try {
+      const { errors, data } = await this.fetchMyQuery(operationsDoc);
+      if (errors) {
+        console.error(errors);
+        throw new Error(errors[0].message);
+      }
+      requestCounter.update((n) => n - 1);
 
-    if (errors) {
-      // handle those errors like a pro
-      console.error(errors);
+      // do something great with this precious data
+      console.log(data);
+      return data;
+    } catch (e) {
+      requestCounter.update((n) => n - 1);
+      console.error(e);
+      throw e;
     }
-
-    // do something great with this precious data
-    console.log(data);
-    return data;
   }
 
   executeMyMutation(operationsDoc) {
@@ -43,16 +50,23 @@ class RequestHelper {
   }
 
   async startExecuteMyMutation(operationsDoc) {
-    const { errors, data } = await this.executeMyMutation(operationsDoc);
+    requestCounter.update((n) => n + 1);
+    try {
+      const { errors, data } = await this.executeMyMutation(operationsDoc);
+      if (errors) {
+        console.error(errors);
+        throw new Error(errors[0].message);
+      }
+      requestCounter.update((n) => n - 1);
 
-    if (errors) {
-      // handle those errors like a pro
-      console.error(errors);
+      // do something great with this precious data
+      console.log(data);
+      return data;
+    } catch (e) {
+      requestCounter.update((n) => n - 1);
+      console.error(e);
+      throw e;
     }
-
-    // do something great with this precious data
-    console.log(data);
-    return data;
   }
 }
 

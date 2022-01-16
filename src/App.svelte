@@ -5,6 +5,8 @@
   import { isAuthenticated, user, fruits, token } from "./store";
   import auth from "./auth-service";
   import { writable } from "svelte/store";
+  import { errors, requestCounter } from "./store";
+  const inputValues = {};
   let auth0Client;
   onMount(async () => {
     auth0Client = await auth.createClient();
@@ -13,7 +15,7 @@
     user.set(await auth0Client.getUser());
     if (isAuthenticated) {
       const accessToken = await auth0Client.getIdTokenClaims();
-      token.set(accessToken.__raw);
+      token.set(accessToken?.__raw);
     }
   });
 
@@ -24,12 +26,17 @@
     }
   });
 
-  const addFruit = async () => {
-    const name = prompt("name") || "";
-    const { insert_fruits_one } = await http.startExecuteMyMutation(
-      OperationDocsStore.addOne(name),
-    );
-    fruits.update((n) => [...n, insert_fruits_one]);
+  const addFruit = () => {
+    const { name } = inputValues;
+    http
+      .startExecuteMyMutation(OperationDocsStore.addOne(name ?? ""))
+      .then(({ insert_fruits_one }) => {
+        fruits.update((n) => [...n, insert_fruits_one]);
+      })
+      .catch((e) => {
+        console.error(e);
+        $errors = [e.message];
+      });
   };
 
   const offline = writable(false);
@@ -39,13 +46,17 @@
   window.ononline = () => {
     offline.set(false);
   };
-  
-  const deleteFruit = async () => {
-    const name = prompt("which fruit to delete?") || "";
-    if (name) {
-      await http.startExecuteMyMutation(OperationDocsStore.deleteByName(name));
-      fruits.update((n) => n.filter((fruit) => fruit.name !== name));
-    }
+
+  const deleteFruit = (id) => {
+    http
+      .startExecuteMyMutation(OperationDocsStore.deleteById(id))
+      .then(() => {
+        fruits.update((n) => n.filter((item) => item.id !== id));
+      })
+      .catch((e) => {
+        console.error(e);
+        $errors = [e.message];
+      });
   };
 
   function login() {
@@ -59,22 +70,37 @@
 
 <main>
   {#if !$offline}
+    {#if $isAuthenticated}
+      {#if $requestCounter}
+        <h1>Loading...</h1>
+      {:else if $errors.length}
+        <h1>{$errors.join("\n")}</h1>
+      {:else}
+        <div>
+          <input placeholder="Add fruit" bind:value={inputValues.name} />
+          <button on:click={addFruit}>Add new fruit</button>
+        </div>
 
-
-  {#if $isAuthenticated}
-    <button on:click={logout}>Log out</button>
-    <button on:click={addFruit}>Add new fruit</button>
-    <button on:click={deleteFruit}>Delete fruit</button>
-
-    {#each $fruits as fruit}
-      <div>
-        <p>fruit name: {fruit.name}</p>
-        <p>user id: {fruit.user_id}</p>
-        <hr />
-      </div>
-    {/each}
-  {:else}
-    <button on:click={login}>Log in</button>{/if}
+        {#if $fruits?.length}
+          {#each $fruits as fruit (fruit.id)}
+            <div>
+              <p>fruit name: {fruit.name}</p>
+              <p>user id: {fruit.user_id}</p>
+              <button on:click={() => deleteFruit(fruit.id)}
+                >Delete fruit</button
+              >
+              <hr />
+            </div>
+          {/each}
+        {:else}
+          <h1>No fruits :(</h1>
+        {/if}
+        {#if $errors.length}
+          <h2>{$errors[0]}</h2>
+        {/if}
+      {/if}
+    {:else}
+      <button on:click={login}>Log in</button>{/if}
   {:else}
     <h1>You are offline</h1>
   {/if}
